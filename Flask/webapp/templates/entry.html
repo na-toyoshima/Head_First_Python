@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+
+{% block body %}
+<h2>{{ the_title }}</h2>
+
+<form method="POST" action="/search4">
+  <table>
+    <p>このフォームを使って検索リクエストを送ってください。</p>
+    <tr>
+      <td>フレーズ：<input name="phrase" type="TEXT" width="60" /></td>
+    </tr>
+    <tr>
+      <td>文字：<input name="letters" type="TEXT" value="aiueo" /></td>
+    </tr>
+  </table>
+  <p>準備ができたらボタンを押してください</p>
+  <p><input value="実行" type="SUBMIT" /></p>
+</form>
+
+{% endblock %}
