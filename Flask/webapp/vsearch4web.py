@@ -1,28 +1,26 @@
 from flask import Flask, render_template, request, escape
 from vsearch import search4letters
+
+from DBcm import UseDatabase
+
 app = Flask(__name__)
 
+app.config['dbconfig'] = {'host': '127.0.0.1',
+            'user': 'vsearch',
+            'password': 'vsearchpasswd',
+            'database': 'vsearchlogDB', }
 
 def log_request(req: 'flask_request', res: str) -> None:
-    dbconfig = {'host': '127.0.0.1',
-                'user': 'vsearch',
-                'password': 'vsearchpasswd',
-                'database': 'vsearchlogDB', }
-    import mysql.connector
-    conn = mysql.connector.connect(**dbconfig)
-    cursor = conn.cursor()
-    _SQL = """insert into log
+    with UseDatabase(app.config['dbconfig']) as cursor:
+        _SQL = """insert into log
             (phrase, letters, ip, browser_string, results)
             values
             (%s,%s,%s,%s,%s)"""
-    cursor.execute(_SQL, (req.form['phrase'],
+        cursor.execute(_SQL, (req.form['phrase'],
                           req.form['letters'],
                           req.remote_addr,
                           req.user_agent.browser,
                           res, ))
-    conn.commit()
-    conn.close()
-    cursor.close()
 
 
 @app.route('/search4', methods=['POST'])
@@ -41,13 +39,12 @@ def do_search() -> str:
 
 @app.route('/viewlog')
 def view_the_log() -> str:
-    contents = []  # 新しい空のリストを作成
-    with open('vsearch.log') as log:  # ログファイルを開いてファイルオブジェクトlogに代入
-        for line in log:  # ファイルオブジェクトlogの各行をループ
-            contents.append([])  # 新しい空のリストをcontentsに追加
-            for item in line.split('|'):  # バーで行を分割し、その結果分割されたリストの各項目を処理
-                contents[-1].append(escape(item))  # エスケープしたデータをcontentsの末尾に追加
-    titles = ('フォームデータ', 'リモートアドレス', 'ユーザーエージェント', '結果')
+    with UseDatabase(app.config['dbconfig']) as cursor:
+        _SQL = """select phrase, letters, ip, browser_string, results from log"""
+        cursor.execute(_SQL)
+        contents = cursor.fetchall()
+
+    titles = ('フレーズ','検索文字', 'リモートアドレス', 'ユーザーエージェント', '結果')
     return render_template('viewlog.html',
                            the_title='ログの閲覧',
                            the_row_titles=titles,
