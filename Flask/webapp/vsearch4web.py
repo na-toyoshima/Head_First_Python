@@ -1,9 +1,21 @@
-from flask import Flask, render_template, request, escape
+from flask import Flask, render_template, request, escape, session
 from vsearch import search4letters
 
-from DBcm import UseDatabase
+from DBcm import UseDatabase, ConnectionError
+from checker import check_logged_in
 
 app = Flask(__name__)
+
+
+@app.route('/login')
+def do_login() -> str:
+    session['logged_in'] = True
+    return 'ログイン中です'
+
+@app.route('/logout')
+def do_logout() -> str:
+    session.pop('logged_in')
+    return 'ログアウト中です'
 
 app.config['dbconfig'] = {'host': '127.0.0.1',
             'user': 'vsearch',
@@ -29,7 +41,10 @@ def do_search() -> str:
     letters = request.form['letters']
     title = "検索結果"
     results = str(search4letters(phrase, letters))
-    log_request(request, results)
+    try:
+        log_request(request, results)
+    except Exception as err:
+        print ('エラーが発生しました:', str(err))
     return render_template('results.html',
                            the_phrase=phrase,
                            the_letters=letters,
@@ -38,17 +53,22 @@ def do_search() -> str:
 
 
 @app.route('/viewlog')
-def view_the_log() -> str:
-    with UseDatabase(app.config['dbconfig']) as cursor:
-        _SQL = """select phrase, letters, ip, browser_string, results from log"""
-        cursor.execute(_SQL)
-        contents = cursor.fetchall()
-
-    titles = ('フレーズ','検索文字', 'リモートアドレス', 'ユーザーエージェント', '結果')
-    return render_template('viewlog.html',
-                           the_title='ログの閲覧',
-                           the_row_titles=titles,
-                           the_data=contents,)
+@check_logged_in
+def view_the_log() -> 'html':
+    try:
+        with UseDatabase(app.config['dbconfig']) as cursor:
+            _SQL = """select phrase, letters, ip, browser_string, results from log"""
+            cursor.execute(_SQL)
+            contents = cursor.fetchall()
+        titles = ('フレーズ','検索文字', 'リモートアドレス', 'ユーザーエージェント', '結果')
+        return render_template('viewlog.html',
+                            the_title='ログの閲覧',
+                            the_row_titles=titles,
+                            the_data=contents,)
+    except ConnectionError as err:
+        print('データベースが動作していますか？', str(err))
+    except Exception as err:
+        print('何か問題が発生しました', str(err))
 
 
 @app.route('/')
@@ -56,6 +76,8 @@ def view_the_log() -> str:
 def entry_page() -> str:
     return render_template('entry.html', the_title='web版のsearch4lettersへようこそ')
 
+
+app.secret_key = 'youwillneverguessmysecretkey'
 
 if __name__ == '__main__':
     app.run(debug=True)
